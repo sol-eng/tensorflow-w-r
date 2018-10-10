@@ -5,9 +5,8 @@ account: edgar
 server: colorado.rstudio.com
 hostUrl: http://colorado.rstudio.com:3939/__api__
 appId: 1552
-bundleId: 18883
-url: http://colorado.rstudio.com:3939/content/1552/
-when: 1539116390.43724
+bundleId: 18958
+url: http://colorado.rstudio.com:3939/churn/overtime/
+when: 1539200278.77111
 asMultiple: FALSE
 asStatic: FALSE
-ignoredFiles: baked.RData

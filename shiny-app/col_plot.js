@@ -62,7 +62,7 @@ var txt = svg.selectAll('text').data(data);
 txt.enter().append('text')
     .attr('x', function(d, i) {return (i * col_width()) + (svg_width()* layer_left) + (col_width() * 0.5); })
     .attr('y', function(d) {return svg_height()* 0.95;})
-    .style('font-size', '10px') 
+    .style('font-size', '12px') 
     .text(function(d) {return d.label;})
     .style('font-family', 'sans-serif')
     .attr('text-anchor', 'middle');
@@ -74,9 +74,9 @@ txt.transition()
   .duration(500)
     .attr('x', function(d, i) {return (i * col_width()) + (svg_width()* layer_left) + (col_width() * 0.5); })
     .attr('y', function(d) {return svg_height()* 0.95;})
-    .style('font-size', '10px') 
-    .text(function(d) {return d.label;})
+    .style('font-size', '12px')
     .style('font-family', 'sans-serif')
+    .text(function(d) {return d.label;})
     .attr('text-anchor', 'middle');
 
 // Numeric labels

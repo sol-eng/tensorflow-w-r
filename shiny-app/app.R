@@ -78,7 +78,7 @@ server <- function(input, output, session) {
   })
 
   output$churn <- renderD3({
-    tenure_bins <- c(1, 5, 1:8 * 10)
+    tenure_bins <- c(1, 3, 6, 9, 12, 18, 24, 36, 48 ,60)
 
     selections <- data.frame(
       gender = input$gender,
@@ -115,14 +115,11 @@ server <- function(input, output, session) {
 
     results <- jsonlite::fromJSON(content(r))$predictions[, , 1]
     results <- round(results, digits = 2)
-
-    
-    yr <- c(" yr", rep(" yrs", 9))
     
     churn <- data.frame(
       y = results,
       x = tenure_bins,
-      label = paste0(tenure_bins, yr),
+      label = paste0(tenure_bins, "m"),
       value_label = paste0(results * 100, "%")
     )
 
