@@ -25,8 +25,10 @@ Source code for the Shiny application that uses the deployed Keras model in RStu
 - Short link to the same app: http://rstd.io/churn
 
 <br/>
-<img src = "images/app1.png" width = '400px' align = 'left'>
-<img src = "images/app2.png" width = '400px' align = 'right'>
+<div>
+  <img src = "images/app1.png" width = '400px' align = 'left'>
+  <img src = "images/app2.png" width = '400px' align = 'left'>
+</div>
 
 ### Presentation 
 
