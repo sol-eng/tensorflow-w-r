@@ -13,7 +13,7 @@ R document that details the process of creating and deploying the model.
 
 ### Exported Keras/Tensorflow model
 
-A folder that contains a Keras Neural Network model developed, and created in the R Notebook.  The resulting files are Tensorflow, not R.  The main file is a [Protocal Buffer](https://developers.google.com/protocol-buffers/?hl=en)
+A folder that contains a Keras Neural Network model developed, and created in the R Notebook.  The resulting files are Tensorflow, not R.  The main file is a [Protocol Buffer](https://developers.google.com/protocol-buffers/?hl=en)
 
 The model was also deployed to RStudio Connect and can be found here: http://colorado.rstudio.com:3939/connect/#/apps/1532/access
 
