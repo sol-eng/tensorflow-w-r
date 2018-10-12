@@ -24,11 +24,9 @@ Source code for the Shiny application that uses the deployed Keras model in RStu
 - Deployed app on RStudio Connect: http://colorado.rstudio.com:3939/churn/overtime/
 - Short link to the same app: http://rstd.io/churn
 
-<br/>
-<div>
-  <img src = "images/app1.png" width = '400px' align = 'left'>
-  <img src = "images/app2.png" width = '400px' align = 'left'>
-</div>
+<img src = "images/app1.png" width = '400px'>
+<img src = "images/app2.png" width = '400px'>
+
 
 ### Presentation 
 
