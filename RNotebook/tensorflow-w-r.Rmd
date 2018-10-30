@@ -38,14 +38,14 @@ The `tidyverse` packages provide an easy way to **import**, **tidy**, **transfor
 ```{r, echo = FALSE}
 library(tidyverse)
 
-if(!file.exists("RNotebook/customer_churn.csv")){
+if(!file.exists("customer_churn.csv")){
   download.file(
-    "https://raw.githubusercontent.com/rstudio/keras-customer-churn/master/data/WA_Fn-UseC_-Telco-Customer-Churn.csv",
-    "RNotebook/customer_churn.csv"
-  ) 
+    "https://raw.githubusercontent.com/sol-eng/tensorflow-w-r/master/RNotebook/customer_churn.csv",
+    "customer_churn.csv"
+  )
 }
 
-churn_data_raw <- read_csv("RNotebook/customer_churn.csv")
+churn_data_raw <- read_csv("customer_churn.csv")
 ```
 
 ```{r, eval = FALSE}
