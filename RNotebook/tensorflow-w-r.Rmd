@@ -75,7 +75,6 @@ traditional resampling techniques for estimating the sampling distribution of a 
 estimating model performance using a holdout set
 
 ```{r}
-
 library(rsample)
 
 set.seed(100)
@@ -83,7 +82,6 @@ set.seed(100)
 train_test_split <- initial_split(
   churn_data_tbl, 
   prop = 0.8)
-
 ```
 
 
@@ -166,7 +164,6 @@ install_keras()
 ### Create Neural Network
 
 ```{r}
-
 model_keras <- keras_model_sequential()
 
 model_keras <- model_keras %>%
@@ -346,7 +343,6 @@ corrr_analysis <- x_train_tbl %>%
   mutate(feature = as_factor(feature)) 
 
 corrr_analysis
-
 ```
 
 ### tidyquant
