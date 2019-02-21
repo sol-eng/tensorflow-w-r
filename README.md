@@ -38,6 +38,8 @@ Companion presentation deck in PDF format.
 
 ### Automated workflow
 
-An example of how to automate the workflow using the `drake` package
+An example of how to automate the workflow using the `drake` package is in the **workflow** folder. 
+
+- Published R Notebook: http://colorado.rstudio.com:3939/content/2159/tensorflow-drake.nb.html
 
 <img src = "images/dep-graph.png" width = '400px'>
