@@ -35,3 +35,9 @@ Companion presentation deck in PDF format.
 <div>
 <img src = "images/presentation.png" width = '600' >
 </div>
+
+### Automated workflow
+
+An example of how to automate the workflow using the `drake` package
+
+<img src = "images/dep-graph.png" width = '400px'>
