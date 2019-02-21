@@ -18,7 +18,7 @@ library(tidyverse)
 library(rsample)
 library(recipes)
 library(yardstick)
-library(corrr)
+#library(corrr)
 library(tensorflow)
 ```
 
@@ -37,14 +37,14 @@ The `tidyverse` packages provide an easy way to **import**, **tidy**, **transfor
 ```{r, echo = FALSE}
 library(tidyverse)
 
-if(!file.exists("RNotebook/customer_churn.csv")){
+if(!file.exists("customer_churn.csv")){
   download.file(
     "https://raw.githubusercontent.com/rstudio/keras-customer-churn/master/data/WA_Fn-UseC_-Telco-Customer-Churn.csv",
-    "RNotebook/customer_churn.csv"
+    "customer_churn.csv"
   ) 
 }
 
-churn_data_raw <- read_csv("RNotebook/customer_churn.csv")
+churn_data_raw <- read_csv("customer_churn.csv")
 ```
 
 ```{r, eval = FALSE}
@@ -114,7 +114,7 @@ rec_obj <- recipe(Churn ~ ., data = train_tbl) %>%
 # Print the recipe object
 rec_obj
 
-save(rec_obj, file = "RNotebook/rec_obj.RData")
+save(rec_obj, file = "rec_obj.RData")
 ```
 
 
@@ -330,7 +330,7 @@ https://github.com/drsimonj/corrr
 
 `corrr` is a package for exploring correlations in R. It focuses on creating and working with data frames of correlations (instead of matrices) that can be easily explored via corrr functions or by leveraging tools like those in the `tidyverse.` 
 
-```{r}
+```{r, eval = FALSE}
 library(corrr)
 
 corrr_analysis <- x_train_tbl %>%
@@ -352,7 +352,7 @@ https://github.com/business-science/tidyquant
 tidyquant integrates the best resources for collecting and analyzing financial data, `zoo`, `xts`, `quantmod`, `TTR`, and `PerformanceAnalytics`, with the tidy data infrastructure of the tidyverse allowing for seamless interaction between each. You can now perform complete financial analyses in the `tidyverse`.
 
 
-```{r, fig.height = 9, fig.height = 6}
+```{r, fig.height = 9, fig.height = 6, eval = FALSE}
 library(tidyquant)
 
 corrr_analysis %>%

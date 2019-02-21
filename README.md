@@ -35,3 +35,11 @@ Companion presentation deck in PDF format.
 <div>
 <img src = "images/presentation.png" width = '600' >
 </div>
+
+### Automated workflow
+
+An example of how to automate the workflow using the `drake` package is in the **workflow** folder. 
+
+- Published R Notebook: http://colorado.rstudio.com:3939/content/2159/tensorflow-drake.nb.html
+
+<img src = "images/dep-graph.png" width = '400px'>
