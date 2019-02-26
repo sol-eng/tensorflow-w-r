@@ -7,14 +7,13 @@ output: html_notebook
 
 ```{r}
 library(drake)
+library(keras)
+library(tidyverse)
+library(rsample)
+library(recipes)
+library(yardstick)
 
 plan <- drake_plan(
-  set_seed = set.seed(100),
-  libraries = lapply(
-                  c("keras","tidyverse", "rsample", "recipes", "yardstick"), 
-                  library, 
-                  character.only = TRUE
-                  ),
   customer_data = read_csv("customer_churn.csv"),
   churn_data_tbl = customer_data %>%
                     select(-customerID) %>%
@@ -98,14 +97,9 @@ plan <- drake_plan(
 ```
 
 
-```{r, include = FALSE}
-clean()
-make(plan)
-```
-
 ```{r}
-clean()
-make(plan)
+clean(destroy = TRUE)
+make(plan, seed = 100)
 ```
 
 ## Dependency graph
