@@ -96,8 +96,12 @@ plan <- drake_plan(
 )
 ```
 
+```{r, include = FALSE}
+clean(destroy = TRUE)
+make(plan, seed = 100)
+```
 
-```{r}
+```{r, eval = FALSE}
 clean(destroy = TRUE)
 make(plan, seed = 100)
 ```
