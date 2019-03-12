@@ -3,10 +3,10 @@ title: churn-keras-rstudio-connect
 username: edgar
 account: edgar
 server: colorado.rstudio.com
-hostUrl: http://colorado.rstudio.com:3939/__api__
+hostUrl: http://colorado.rstudio.com/rsc/__api__
 appId: 1552
 bundleId: 18958
-url: http://colorado.rstudio.com:3939/churn/overtime/
+url: http://colorado.rstudio.com/rsc/churn/overtime/
 when: 1539200278.77111
 asMultiple: FALSE
 asStatic: FALSE
