@@ -96,43 +96,34 @@ rec_obj <- recipe(Churn ~ ., data = train_tbl) %>%
   step_dummy(all_nominal(), -all_outcomes()) %>%
   step_center(all_predictors(), -all_outcomes()) %>%
   step_scale(all_predictors(), -all_outcomes()) %>%
-  prep(data = train_tbl)
+  prep()
 
-# Print the recipe object
 rec_obj
+```
 
+
+```{r}
 save(rec_obj, file = "rec_obj.RData")
 ```
 
-Use `bake()` to pass the data through the new recipe. The predictor and outcome data are processed separately.  This is because how Keras expects these arguments to be used when fitting a model.
+Use `juice()` to extarct the results from the model preparation. The predictor and outcome data are processed separately.  This is because how Keras expects these arguments to be used when fitting a model.
 
 ```{r}
-x_train_tbl <- bake(
-  rec_obj, 
-  new_data = train_tbl, 
-  all_predictors(), 
-  composition = "matrix") 
-
-y_train_vec <- bake(
-  rec_obj, 
-  new_data = train_tbl, 
-  all_outcomes()) %>%
-  pull()
+x_train_tbl <- juice(rec_obj, all_predictors(), composition = "matrix") 
+y_train_vec <- juice(rec_obj, all_outcomes()) %>% pull()
 ```
 
 The same is done with the testing data so that the two can be compared.
 
 ```{r}
-x_test_tbl <- bake(
-  rec_obj, 
-  new_data = test_tbl, 
-  all_predictors(), 
-  composition = "matrix")
+baked_test <- bake(rec_obj, test_tbl)
 
-y_test_vec <- bake(
-  rec_obj, 
-  new_data = test_tbl, 
-  all_outcomes()) %>%
+x_test_tbl <- baked_test %>%
+  select(-Churn) %>%
+  as.matrix()
+
+y_test_vec <- baked_test %>%
+  select(Churn) %>%
   pull()
 ```
 
