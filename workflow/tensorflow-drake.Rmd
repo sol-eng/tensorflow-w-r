@@ -5,6 +5,16 @@ output: html_notebook
 
 ## Creating a plan
 
+```{r setup, include = FALSE}
+library(drake)
+library(keras)
+library(tidyverse)
+library(rsample)
+library(recipes)
+library(yardstick)
+```
+
+
 ```{r}
 library(drake)
 library(keras)
@@ -15,84 +25,86 @@ library(yardstick)
 
 plan <- drake_plan(
   customer_data = read_csv("customer_churn.csv"),
-  churn_data_tbl = customer_data %>%
-                    select(-customerID) %>%
-                    drop_na() %>%
-                    select(Churn, everything()),
   train_test_split = initial_split(
-                        churn_data_tbl, 
-                        prop = 0.8),
+    customer_data,
+    prop = 0.3
+  ),
   train_tbl = training(train_test_split),
-  test_tbl  = testing(train_test_split),
-  rec_obj =   recipe(Churn ~ ., data = train_tbl) %>%
-                  step_discretize(tenure, options = list(cuts = 6)) %>%
-                  step_log(TotalCharges) %>%
-                  step_dummy(all_nominal(), -all_outcomes()) %>%
-                  step_center(all_predictors(), -all_outcomes()) %>%
-                  step_scale(all_predictors(), -all_outcomes()) %>%
-                  prep(data = train_tbl),
+  test_tbl = testing(train_test_split),
+  rec_obj = train_tbl %>%
+    recipe(Churn ~ .) %>%
+    step_rm(customerID) %>%
+    step_naomit(all_outcomes(), all_predictors()) %>%
+    step_discretize(tenure, options = list(cuts = 6)) %>%
+    step_log(TotalCharges) %>%
+    step_mutate(Churn = ifelse(Churn == "Yes", 1, 0)) %>%
+    step_dummy(all_nominal(), -all_outcomes()) %>%
+    step_center(all_predictors(), -all_outcomes()) %>%
+    step_scale(all_predictors(), -all_outcomes()) %>%
+    prep(),
   save_rec_obj = save(rec_obj, file = "rec_obj.RData"),
-  x_train_tbl = bake(rec_obj, newdata = train_tbl) %>% 
-                  select(-Churn),
-  x_test_tbl = bake(rec_obj, newdata = test_tbl) %>%
-                  select(-Churn),
-  y_train_vec = train_tbl %>%
-                  mutate(ifelse(Churn == "Yes", 1, 0)) %>%
-                  pull(),
-  y_test_vec  = test_tbl %>%
-                  mutate(ifelse(Churn == "Yes", 1, 0)) %>%
-                  pull(),
+  x_train_tbl = juice(rec_obj, all_predictors(), composition = "matrix"),
+  y_train_vec = juice(rec_obj, all_outcomes()) %>% pull(),
+  baked_test = bake(rec_obj, test_tbl),
+  x_test_tbl = baked_test %>%
+    select(-Churn) %>%
+    as.matrix(),
+  y_test_vec = baked_test %>%
+    select(Churn) %>%
+    pull(),
   model_keras = keras_model_sequential() %>%
-                  layer_dense(
-                    units = 16, 
-                    kernel_initializer = "uniform", 
-                    activation = "relu", 
-                    input_shape = ncol(x_train_tbl)) %>% 
-                  layer_dropout(rate = 0.1) %>%
-                  layer_dense(
-                    units = 16, 
-                    kernel_initializer = "uniform", 
-                    activation = "relu") %>% 
-                  layer_dropout(rate = 0.1) %>%
-                  layer_dense(
-                    units = 1, 
-                    kernel_initializer = "uniform", 
-                    activation = "sigmoid") %>% 
-                  compile(
-                    optimizer = 'adam',
-                    loss = 'binary_crossentropy',
-                    metrics = c('accuracy')
-                  ),
+    layer_dense(
+      units = 16,
+      kernel_initializer = "uniform",
+      activation = "relu",
+      input_shape = ncol(x_train_tbl)
+    ) %>%
+    layer_dropout(rate = 0.1) %>%
+    layer_dense(
+      units = 16,
+      kernel_initializer = "uniform",
+      activation = "relu"
+    ) %>%
+    layer_dropout(rate = 0.1) %>%
+    layer_dense(
+      units = 1,
+      kernel_initializer = "uniform",
+      activation = "sigmoid"
+    ) %>%
+    compile(
+      optimizer = "adam",
+      loss = "binary_crossentropy",
+      metrics = c("accuracy")
+    ),
   fit_keras = fit(
-                  object = model_keras, 
-                  x = as.matrix(x_train_tbl), 
-                  y = y_train_vec,
-                  batch_size = 50, 
-                  epochs = 35,
-                  validation_split = 0.30
-                ),
+    object = model_keras,
+    x = x_train_tbl,
+    y = y_train_vec,
+    batch_size = 50,
+    epochs = 35,
+    validation_split = 0.30,
+    verbose = 0
+  ),
   plot_fit_keras = plot(fit_keras),
-  yhat_keras_class_vec = 
-                  predict_classes(
-                    object = model_keras, 
-                    x = as.matrix(x_test_tbl)) %>%
-                  as.vector(),
-  yhat_keras_prob_vec  = 
-                  predict_proba(
-                    object = model_keras, 
-                    x = as.matrix(x_test_tbl)) %>%
-                  as.vector(),
+  yhat_keras_class_vec = model_keras %>%
+    predict_classes(x_test_tbl) %>%
+    as.factor() %>%
+    fct_recode(yes = "1", no = "0"),
+  yhat_keras_prob_vec =
+    model_keras %>%
+      predict_proba(x_test_tbl) %>%
+      as.vector(),
+  test_truth = y_test_vec %>%
+    as.factor() %>%
+    fct_recode(yes = "1", no = "0"),
   estimates_keras_tbl = tibble(
-                    truth = as.factor(y_test_vec) %>% 
-                      fct_recode(yes = "1", no = "0"),
-                    estimate = as.factor(yhat_keras_class_vec) %>% 
-                      fct_recode(yes = "1", no = "0"),
-                    class_prob = yhat_keras_prob_vec),
+    truth = test_truth,
+    estimate = yhat_keras_class_vec,
+    class_prob = yhat_keras_prob_vec
+  ),
   confusion_matrix = estimates_keras_tbl %>%
-                      conf_mat(truth, estimate),
-  save_model = keras:::export_savedmodel.keras.engine.training.Model(model_keras, "newmodel"),
-
-  strings_in_dots = "literals"
+    conf_mat(truth, estimate),
+  save_model = keras:::export_savedmodel.keras.engine.training.Model(model_keras, "newmodel")
 )
 ```
 

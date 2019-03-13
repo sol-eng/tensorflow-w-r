@@ -3,10 +3,10 @@ title: tensorflow-drake
 username: edgar
 account: edgar
 server: colorado.rstudio.com
-hostUrl: http://colorado.rstudio.com/rsc/__api__
+hostUrl: https://colorado.rstudio.com/rsc/__api__
 appId: 2159
-bundleId: 25155
-url: http://colorado.rstudio.com/rsc/content/2159/
-when: 1551207925.41835
+bundleId: 25308
+url: https://colorado.rstudio.com:443/rsc/content/2159/
+when: 1552502939.15198
 asMultiple: FALSE
 asStatic: TRUE

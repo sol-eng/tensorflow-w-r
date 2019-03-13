@@ -82,7 +82,8 @@ The `recipes` package is an alternative method for creating and preprocessing de
 ```{r}
 library(recipes)
 
-rec_obj <- recipe(Churn ~ ., data = train_tbl) %>%
+rec_obj <- train_tbl %>%
+  recipe(Churn ~ .) %>%
   step_rm(customerID) %>%
   step_naomit(all_outcomes(), all_predictors()) %>%
   step_discretize(tenure, options = list(cuts = 6)) %>%
@@ -168,11 +169,11 @@ model_keras
 
 ### Fit model
 
-```{r, echo = FALSE}
+```{r}
 # Fit the keras model to the training data
 history <- fit(
   object = model_keras, 
-  x = as.matrix(x_train_tbl), 
+  x = x_train_tbl, 
   y = y_train_vec,
   batch_size = 50, 
   epochs = 35,

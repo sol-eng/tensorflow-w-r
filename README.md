@@ -15,7 +15,7 @@ R document that details the process of creating and deploying the model.
 
 A folder that contains a Keras Neural Network model developed, and created in the R Notebook.  The resulting files are Tensorflow, not R.  The main file is a [Protocol Buffer](https://developers.google.com/protocol-buffers/?hl=en)
 
-The model was also deployed to RStudio Connect and can be found here: http://colorado.rstudio.com/rsc/connect/#/apps/1532/access
+The model was also deployed to RStudio Connect and can be found here: http://colorado.rstudio.com/rsc/connect/#/apps/2230/access
 
 ### Shiny app
 
@@ -30,7 +30,7 @@ Source code for the Shiny application that uses the deployed Keras model in RStu
 
 ### Presentation 
 
-Companion presentation deck in PDF format. 
+Companion presentation deck in PDF format: https://github.com/sol-eng/tensorflow-w-r/blob/master/presentation/tensorflow-w-R.pdf
 
 <div>
 <img src = "images/presentation.png" width = '600' >
