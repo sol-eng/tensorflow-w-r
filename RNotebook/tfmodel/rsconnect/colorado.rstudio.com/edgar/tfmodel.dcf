@@ -1,0 +1,10 @@
+name: tfmodel
+title:
+username: edgar
+account: edgar
+server: colorado.rstudio.com
+hostUrl: https://colorado.rstudio.com/rsc/__api__
+appId: 2230
+bundleId: 25300
+url: https://colorado.rstudio.com:443/rsc/content/2230/
+when: 1552484441.15294

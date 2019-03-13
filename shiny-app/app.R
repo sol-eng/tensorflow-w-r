@@ -6,6 +6,8 @@ library(shinymaterial)
 library(purrr)
 library(r2d3)
 
+load("rec_obj.RData")
+
 ui <- material_page(
   title = "Tensorflow with R",
   material_side_nav(
@@ -43,7 +45,9 @@ ui <- material_page(
   mainPanel(
     material_card(
       title = "Probability of Churn over time",
-      d3Output("churn"), 
+      d3Output("churn1"), 
+      #d3Output("d3"),
+      #plotOutput("churn"),
       depth = 5
     )
     
@@ -52,32 +56,31 @@ ui <- material_page(
 
 
 server <- function(input, output, session) {
-  load("rec_obj.RData")
 
-  observeEvent(input$phone, {
-    if (input$phone == "No") {
-      dv <- "No phone service"
-    } else {
-      dv <- "No"
-    }
-    update_material_dropdown(session, "multiple", value = dv)
-  })
+  # observeEvent(input$phone, {
+  #   if (input$phone == "No") {
+  #     dv <- "No phone service"
+  #   } else {
+  #     dv <- "No"
+  #   }
+  #   update_material_dropdown(session, "multiple", value = dv)
+  # })
+  # 
+  # observeEvent(input$internet, {
+  #   if (input$internet == "No") {
+  #     dv <- "No internet service"
+  #   } else {
+  #     dv <- "No"
+  #   }
+  #   update_material_dropdown(session, "security", value = dv)
+  #   update_material_dropdown(session, "device", value = dv)
+  #   update_material_dropdown(session, "backup", value = dv)
+  #   update_material_dropdown(session, "support", value = dv)
+  #   update_material_dropdown(session, "tv", value = dv)
+  #   update_material_dropdown(session, "movies", value = dv)
+  # })
 
-  observeEvent(input$internet, {
-    if (input$internet == "No") {
-      dv <- "No internet service"
-    } else {
-      dv <- "No"
-    }
-    update_material_dropdown(session, "security", value = dv)
-    update_material_dropdown(session, "device", value = dv)
-    update_material_dropdown(session, "backup", value = dv)
-    update_material_dropdown(session, "support", value = dv)
-    update_material_dropdown(session, "tv", value = dv)
-    update_material_dropdown(session, "movies", value = dv)
-  })
-
-  output$churn <- renderD3({
+  output$churn1 <- renderD3({
     tenure_bins <- c(1, 3, 6, 9, 12, 18, 24, 36, 48 ,60)
 
     selections <- data.frame(
@@ -85,7 +88,6 @@ server <- function(input, output, session) {
       SeniorCitizen = as.integer(input$senior),
       Partner = input$partner,
       Dependents = input$dependents,
-      # tenure = as.integer(input$tenure),
       tenure = tenure_bins,
       PhoneService = input$phone,
       MultipleLines = input$multiple,
@@ -100,30 +102,25 @@ server <- function(input, output, session) {
       PaperlessBilling = input$paperless,
       PaymentMethod = input$payment,
       MonthlyCharges = input$monthly,
-      TotalCharges = input$total
+      TotalCharges = input$total,
+      Churn = 0
     )
-
-    baked_selections <- bake(rec_obj, selections)
+    baked_selections <- bake(rec_obj, new_data =  selections)
     baked_selections$Churn <- NULL
-
-    body <- list(
-      instances = list(
-        map(1:10, ~as.numeric(baked_selections[.x, ]))
-      )
-    )
-    r <- POST("http://colorado.rstudio.com:3939/content/1532/serving_default/predict", body = body, encode = "json")
-
+    baked_numeric <- baked_selections %>%
+      transpose() %>%
+      map(as.numeric)
+    body <- list(instances = list(baked_numeric))
+    r <- POST("https://colorado.rstudio.com/rsc/content/2230/serving_default/predict", body = body, encode = "json")
     results <- jsonlite::fromJSON(content(r))$predictions[, , 1]
     results <- round(results, digits = 2)
-    
-    churn <- data.frame(
+    churn_data <- data.frame(
       y = results,
       x = tenure_bins,
       label = paste0(tenure_bins, "m"),
       value_label = paste0(results * 100, "%")
     )
-
-    r2d3(churn, "col_plot.js")
+    r2d3(churn_data,"col_plot.js")
   })
 }
 

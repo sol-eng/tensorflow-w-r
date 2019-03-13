@@ -67,12 +67,8 @@ set.seed(100)
 
 train_test_split <- initial_split(
   churn_data_raw, 
-  prop = 0.1)
-```
+  prop = 0.3)
 
-
-```{r}
-# Retrieve train and test sets
 train_tbl <- training(train_test_split)
 test_tbl  <- testing(train_test_split)
 ```
@@ -86,7 +82,6 @@ The `recipes` package is an alternative method for creating and preprocessing de
 ```{r}
 library(recipes)
 
-# Create recipe
 rec_obj <- recipe(Churn ~ ., data = train_tbl) %>%
   step_rm(customerID) %>%
   step_naomit(all_outcomes(), all_predictors()) %>%
@@ -98,12 +93,12 @@ rec_obj <- recipe(Churn ~ ., data = train_tbl) %>%
   step_scale(all_predictors(), -all_outcomes()) %>%
   prep()
 
-rec_obj
+summary(rec_obj)
 ```
 
-
+Save the recipe file into the Shiny folder for later use
 ```{r}
-save(rec_obj, file = "rec_obj.RData")
+save(rec_obj, file = "../shiny-app/rec_obj.RData")
 ```
 
 Use `juice()` to extarct the results from the model preparation. The predictor and outcome data are processed separately.  This is because how Keras expects these arguments to be used when fitting a model.
@@ -146,9 +141,7 @@ library(keras)
 ### Create Neural Network
 
 ```{r}
-model_keras <- keras_model_sequential()
-
-model_keras <- model_keras %>%
+model_keras <- keras_model_sequential() %>%
   layer_dense(
     units = 16, 
     kernel_initializer = "uniform", 
@@ -183,10 +176,10 @@ history <- fit(
   y = y_train_vec,
   batch_size = 50, 
   epochs = 35,
-  validation_split = 0.30
+  validation_split = 0.30,
+  verbose = 0
 )
 
-# Print a summary of the training history
 print(history)
 ```
 
@@ -380,29 +373,35 @@ churn_data_raw %>%
 
 ### Save the Keras model
 
-```{r}
-export_savedmodel(model_keras, "newmodel")
+```{r, eval = FALSE}
+export_savedmodel(model_keras, "tfmodel")
 ```
 
 ## Deploy to RStudio Connect
 
 ```{r,eval = FALSE}
 library(rsconnect)
-deployTFModel('newmodel', server = 'colorado.rstudio.com', account = rstudioapi::askForPassword("Enter Connect Username:"))
+deployTFModel(
+  "tfmodel", 
+  server = "colorado.rstudio.com", 
+  account = rstudioapi::askForPassword("Enter Connect Username:")
+  )
 ```
 
 ### Test the deployed model
 
-```{r, eval = FALSE}
+```{r}
 library(httr)
 
-body <- list(
-  instances = list(
-    map(1:4, ~as.numeric(x_test_tbl[.x, ]))
-  ))
+baked_numeric <- x_test_tbl %>%
+  as_tibble() %>%
+  head(4) %>%
+  transpose() %>%
+  map(as.numeric)
 
-r <- POST("http://colorado.rstudio.com/rsc/content/1532/serving_default/predict", body = body, encode = "json")
-r
+body <- list(instances = list(baked_numeric))
+
+r <- POST("https://colorado.rstudio.com/rsc/content/2230/serving_default/predict", body = body, encode = "json")
+
 jsonlite::fromJSON(content(r))$predictions[, , 1]
 ```
-
