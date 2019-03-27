@@ -10,6 +10,11 @@ library(tidyverse)
 library(rsample)
 library(recipes)
 library(yardstick)
+options(
+  drake_make_menu = FALSE,
+  drake_clean_menu = FALSE,
+  warnPartialMatchArgs = FALSE
+)
 clean(destroy = TRUE)
 knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
 ```
@@ -53,7 +58,7 @@ prepare_recipe <- function(data) {
 define a [`keras`](https://github.com/rstudio/keras) model,
 
 ```{r}
-define_model <- function(rec, dropout) {
+define_model <- function(rec) {
   input_shape <- ncol(
     juice(rec, all_predictors(), composition = "matrix")
   )
@@ -64,13 +69,13 @@ define_model <- function(rec, dropout) {
       activation = "relu",
       input_shape = input_shape
     ) %>%
-    layer_dropout(rate = dropout) %>%
+    layer_dropout(rate = 0.1) %>%
     layer_dense(
       units = 16,
       kernel_initializer = "uniform",
       activation = "relu"
     ) %>%
-    layer_dropout(rate = dropout) %>%
+    layer_dropout(rate = 0.1) %>%
     layer_dense(
       units = 1,
       kernel_initializer = "uniform",
@@ -83,8 +88,8 @@ train and [serialize](https://tensorflow.rstudio.com/keras/reference/serialize_m
 
 
 ```{r}
-train_model <- function(data, rec, dropout) {
-  model <- define_model(rec, dropout)
+train_model <- function(data, rec, batch_size) {
+  model <- define_model(rec)
   compile(
     model,
     optimizer = "adam",
@@ -102,7 +107,7 @@ train_model <- function(data, rec, dropout) {
     object = model,
     x = x_train_tbl,
     y = y_train_vec,
-    batch_size = 50,
+    batch_size = batch_size,
     epochs = 35,
     validation_split = 0.30,
     verbose = 0
@@ -114,8 +119,8 @@ train_model <- function(data, rec, dropout) {
 compare the predictions of a [serialized](https://tensorflow.rstudio.com/keras/reference/serialize_model.html) model against reality,
 
 ```{r}
-confusion_matrix <- function(data, rec, model) {
-  model <- unserialize_model(model)
+confusion_matrix <- function(data, rec, serialized_model) {
+  model <- unserialize_model(serialized_model)
   testing_data <- bake(rec, testing(data))
   x_test_tbl <- testing_data %>%
     select(-Churn) %>%
@@ -148,35 +153,41 @@ and compare the performance of multiple models.
 
 ```{r}
 compare_models <- function(...) {
-  models <- as.character(match.call()[-1]) %>%
+  batch_sizes <- match.call()[-1] %>%
+    as.character() %>%
     gsub(pattern = "conf_", replacement = "")
   df <- map_df(list(...), summary) %>%
     filter(.metric %in% c("accuracy", "sens", "spec")) %>%
-    mutate(model = rep(models, each = n() / length(models))) %>%
+    mutate(
+      batch_size = rep(batch_sizes, each = n() / length(batch_sizes))
+    ) %>%
     rename(metric = .metric, estimate = .estimate)
   ggplot(df) +
-    geom_point(aes(x = metric, y = estimate, color = model))
+    geom_line(
+      aes(x = metric, y = estimate, color = batch_size, group = batch_size)
+    ) +
+    theme_gray(16)
 }
 ```
 
 ## Plan
 
-Next, we define our workflow in a [`drake` plan](https://ropenscilabs.github.io/drake-manual/plans.html).
+Next, we define our workflow in a [`drake` plan](https://ropenscilabs.github.io/drake-manual/plans.html). We will prepare the data, train different models with different batch sizes, and compare the models in terms of performance. 
 
 ```{r}
-dropout <- seq(0.1, 0.2, by = 0.1)
+batch_sizes <- c(16, 32)
 
 plan <- drake_plan(
   data = read_csv(file_in("customer_churn.csv"), col_types = cols()) %>%
     initial_split(prop = 0.3),
   rec = prepare_recipe(data),
   model = target(
-    train_model(data, rec, drop),
-    transform = map(drop = !!dropout)
+    train_model(data, rec, batch_size),
+    transform = map(batch_size = !!batch_sizes)
   ),
   conf = target(
     confusion_matrix(data, rec, model),
-    transform = map(model)
+    transform = map(model, .id = batch_size)
   ),
   comparison = target(
     compare_models(conf),
@@ -193,7 +204,7 @@ plan
 
 ## Dependency graph
 
-In our workflow, we will prepare the data, train different models with different dropouts, and compare them in terms of performance. The graph visualizes the dependency relationships among these steps.
+The graph visualizes the dependency relationships among the steps of the workflow.
 
 ```{r}
 config <- drake_config(plan)
@@ -216,24 +227,24 @@ The two models performed about the same.
 readd(comparison) # see also loadd()
 ```
 
-## Try more models
+## Add models
 
-Let's try more dropout rates.
+Let's try another batch size.
 
 ```{r}
-dropout <- seq(0.1, 0.4, by = 0.1)
+batch_sizes <- c(16, 32, 64)
 
 plan <- drake_plan(
   data = read_csv(file_in("customer_churn.csv"), col_types = cols()) %>%
     initial_split(prop = 0.3),
   rec = prepare_recipe(data),
   model = target(
-    train_model(data, rec, drop),
-    transform = map(drop = !!dropout)
+    train_model(data, rec, batch_size),
+    transform = map(batch_size = !!batch_sizes)
   ),
   conf = target(
     confusion_matrix(data, rec, model),
-    transform = map(model)
+    transform = map(model, .id = batch_size)
   ),
   comparison = target(
     compare_models(conf),
@@ -242,7 +253,7 @@ plan <- drake_plan(
 )
 ```
 
-We already trained models with dropouts 0.1 and 0.2, and their dependencies have not changed, so some of our work is already up to date.
+We already trained models with batch sizes 16 and 32, and their dependencies have not changed, so some of our work is already up to date.
 
 ```{r}
 config <- drake_config(plan)
