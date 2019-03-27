@@ -1,9 +1,7 @@
 ---
 title: "Automated workflow"
-output: html_notebook
+output: html_document
 ---
-
-## Creating a plan
 
 ```{r setup, include = FALSE}
 library(drake)
@@ -12,8 +10,15 @@ library(tidyverse)
 library(rsample)
 library(recipes)
 library(yardstick)
+clean(destroy = TRUE)
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
 ```
 
+Let's use [`drake`](https://github.com/ropensci/drake) to train and compare multiple models in a unified automated workflow.
+
+## Packages
+
+First, we load our packages into a fresh R session.
 
 ```{r}
 library(drake)
@@ -22,16 +27,16 @@ library(tidyverse)
 library(rsample)
 library(recipes)
 library(yardstick)
+```
 
-plan <- drake_plan(
-  customer_data = read_csv("customer_churn.csv"),
-  train_test_split = initial_split(
-    customer_data,
-    prop = 0.3
-  ),
-  train_tbl = training(train_test_split),
-  test_tbl = testing(train_test_split),
-  rec_obj = train_tbl %>%
+## Functions
+
+[`drake`](https://github.com/ropensci/drake) is R-focused and function-oriented. We create functions to [preprocess the data](https://github.com/tidymodels/recipes),
+
+```{r}
+prepare_recipe <- function(data) {
+  data %>%
+    training() %>%
     recipe(Churn ~ .) %>%
     step_rm(customerID) %>%
     step_naomit(all_outcomes(), all_predictors()) %>%
@@ -41,100 +46,225 @@ plan <- drake_plan(
     step_dummy(all_nominal(), -all_outcomes()) %>%
     step_center(all_predictors(), -all_outcomes()) %>%
     step_scale(all_predictors(), -all_outcomes()) %>%
-    prep(),
-  save_rec_obj = save(rec_obj, file = "rec_obj.RData"),
-  x_train_tbl = juice(rec_obj, all_predictors(), composition = "matrix"),
-  y_train_vec = juice(rec_obj, all_outcomes()) %>% pull(),
-  baked_test = bake(rec_obj, test_tbl),
-  x_test_tbl = baked_test %>%
-    select(-Churn) %>%
-    as.matrix(),
-  y_test_vec = baked_test %>%
-    select(Churn) %>%
-    pull(),
-  model_keras = keras_model_sequential() %>%
+    prep()
+}
+```
+
+define a [`keras`](https://github.com/rstudio/keras) model,
+
+```{r}
+define_model <- function(rec, dropout) {
+  input_shape <- ncol(
+    juice(rec, all_predictors(), composition = "matrix")
+  )
+  keras_model_sequential() %>%
     layer_dense(
       units = 16,
       kernel_initializer = "uniform",
       activation = "relu",
-      input_shape = ncol(x_train_tbl)
+      input_shape = input_shape
     ) %>%
-    layer_dropout(rate = 0.1) %>%
+    layer_dropout(rate = dropout) %>%
     layer_dense(
       units = 16,
       kernel_initializer = "uniform",
       activation = "relu"
     ) %>%
-    layer_dropout(rate = 0.1) %>%
+    layer_dropout(rate = dropout) %>%
     layer_dense(
       units = 1,
       kernel_initializer = "uniform",
       activation = "sigmoid"
-    ) %>%
-    compile(
-      optimizer = "adam",
-      loss = "binary_crossentropy",
-      metrics = c("accuracy")
-    ),
-  fit_keras = fit(
-    object = model_keras,
+    )
+}
+```
+
+train and [serialize](https://tensorflow.rstudio.com/keras/reference/serialize_model.html) a model,
+
+
+```{r}
+train_model <- function(data, rec, dropout) {
+  model <- define_model(rec, dropout)
+  compile(
+    model,
+    optimizer = "adam",
+    loss = "binary_crossentropy",
+    metrics = c("accuracy")
+  )
+  x_train_tbl <- juice(
+    rec,
+    all_predictors(),
+    composition = "matrix"
+  )
+  y_train_vec <- juice(rec, all_outcomes()) %>%
+    pull()
+  fit(
+    object = model,
     x = x_train_tbl,
     y = y_train_vec,
     batch_size = 50,
     epochs = 35,
     validation_split = 0.30,
     verbose = 0
-  ),
-  plot_fit_keras = plot(fit_keras),
-  yhat_keras_class_vec = model_keras %>%
+  )
+  serialize_model(model)
+}
+```
+
+compare the predictions of a [serialized](https://tensorflow.rstudio.com/keras/reference/serialize_model.html) model against reality,
+
+```{r}
+confusion_matrix <- function(data, rec, model) {
+  model <- unserialize_model(model)
+  testing_data <- bake(rec, testing(data))
+  x_test_tbl <- testing_data %>%
+    select(-Churn) %>%
+    as.matrix()
+  y_test_vec <- testing_data %>%
+    select(Churn) %>%
+    pull()
+  yhat_keras_class_vec <- model %>%
     predict_classes(x_test_tbl) %>%
     as.factor() %>%
-    fct_recode(yes = "1", no = "0"),
-  yhat_keras_prob_vec =
-    model_keras %>%
-      predict_proba(x_test_tbl) %>%
-      as.vector(),
-  test_truth = y_test_vec %>%
+    fct_recode(yes = "1", no = "0")
+  yhat_keras_prob_vec <-
+    model %>%
+    predict_proba(x_test_tbl) %>%
+    as.vector()
+  test_truth <- y_test_vec %>%
     as.factor() %>%
-    fct_recode(yes = "1", no = "0"),
-  estimates_keras_tbl = tibble(
+    fct_recode(yes = "1", no = "0")
+  estimates_keras_tbl <- tibble(
     truth = test_truth,
     estimate = yhat_keras_class_vec,
     class_prob = yhat_keras_prob_vec
+  )
+  estimates_keras_tbl %>%
+    conf_mat(truth, estimate)
+}
+```
+
+and compare the performance of multiple models. 
+
+```{r}
+compare_models <- function(...) {
+  models <- as.character(match.call()[-1]) %>%
+    gsub(pattern = "conf_", replacement = "")
+  df <- map_df(list(...), summary) %>%
+    filter(.metric %in% c("accuracy", "sens", "spec")) %>%
+    mutate(model = rep(models, each = n() / length(models))) %>%
+    rename(metric = .metric, estimate = .estimate)
+  ggplot(df) +
+    geom_point(aes(x = metric, y = estimate, color = model))
+}
+```
+
+## Plan
+
+Next, we define our workflow in a [`drake` plan](https://ropenscilabs.github.io/drake-manual/plans.html).
+
+```{r}
+plan <- drake_plan(
+  data = read_csv(file_in("customer_churn.csv"), col_types = cols()) %>%
+    initial_split(prop = 0.3),
+  rec = prepare_recipe(data),
+  model = target(
+    train_model(data, rec, dropout),
+    transform = map(dropout = c(0.1, 0.2))
   ),
-  confusion_matrix = estimates_keras_tbl %>%
-    conf_mat(truth, estimate),
-  save_model = keras:::export_savedmodel.keras.engine.training.Model(model_keras, "newmodel")
+  conf = target(
+    confusion_matrix(data, rec, model),
+    transform = map(model)
+  ),
+  comparison = target(
+    compare_models(conf),
+    transform = combine(conf)
+  )
 )
 ```
 
-```{r, include = FALSE}
-clean(destroy = TRUE)
-make(plan, seed = 100)
-```
+The plan is a data frame with the steps we are going to do.
 
-```{r, eval = FALSE}
-clean(destroy = TRUE)
-make(plan, seed = 100)
+```{r}
+plan
 ```
 
 ## Dependency graph
 
-This shows how each step in the workflow is related to each other.
+In our workflow, we will prepare the data, train different models with different dropouts, and compare them in terms of performance. The graph visualizes the dependency relationships among these steps.
 
 ```{r}
 config <- drake_config(plan)
 vis_drake_graph(config)
 ```
 
-## Pull data from the plan
+## Run the models
+
+Call [`make()`](https://ropensci.github.io/drake/reference/make.html) to actually run the workflow.
 
 ```{r}
-readd(plot_fit_keras)
+make(plan)
 ```
+
+## Inspect the results
+
+The two models performed about the same.
 
 ```{r}
-readd(confusion_matrix)
+readd(comparison) # see also loadd()
 ```
 
+## Try more models
 
+Let's try more dropout rates.
+
+```{r}
+plan <- drake_plan(
+  data = read_csv(file_in("customer_churn.csv"), col_types = cols()) %>%
+    initial_split(prop = 0.3),
+  rec = prepare_recipe(data),
+  model = target(
+    train_model(data, rec, dropout),
+    transform = map(dropout = c(0.01, 0.1, 0.2, 0.3, 0.4))
+  ),
+  conf = target(
+    confusion_matrix(data, rec, model),
+    transform = map(model)
+  ),
+  comparison = target(
+    compare_models(conf),
+    transform = combine(conf)
+  )
+)
+```
+
+We already trained models with dropouts 0.1 and 0.2, and their dependencies have not changed, so some of our work is already up to date.
+
+```{r}
+config <- drake_config(plan)
+vis_drake_graph(config) # see also outdated() and predict_runtime()
+```
+
+[`make()`](https://ropensci.github.io/drake/reference/make.html) only trains the outdated or missing models and refreshes the post-processing.
+
+
+```{r}
+make(plan)
+```
+
+## Inspect the results again
+
+```{r}
+readd(comparison) # see also loadd()
+```
+
+Going forward, we can turn our attention to different tuning parameters and try to improve specificity.
+
+## Tips
+
+- To save this code in well-organized R scripts, see the [guidance on persistent `drake`-powered projects](https://ropenscilabs.github.io/drake-manual/projects.html).
+- [`drake`](https://github.com/ropensci/drake) has [built-in distributed computing support](https://ropenscilabs.github.io/drake-manual/hpc.html) that lets you fit multiple models in parallel.
+
+```{r, echo = FALSE}
+clean(destroy = TRUE)
+```
