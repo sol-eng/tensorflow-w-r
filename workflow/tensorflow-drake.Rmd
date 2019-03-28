@@ -1,6 +1,6 @@
 ---
 title: "Automated workflow"
-output: html_document
+output: html_notebook
 ---
 
 ```{r setup, include = FALSE}
@@ -13,10 +13,15 @@ library(yardstick)
 options(
   drake_make_menu = FALSE,
   drake_clean_menu = FALSE,
-  warnPartialMatchArgs = FALSE
+  warnPartialMatchArgs = FALSE,
+  crayon.enabled = FALSE,
+  readr.show_progress = FALSE
 )
 clean(destroy = TRUE)
-knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
 ```
 
 Let's use [`drake`](https://github.com/ropensci/drake) to train and compare multiple models in a unified automated workflow.
