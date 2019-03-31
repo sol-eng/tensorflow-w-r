@@ -203,7 +203,7 @@ plan <- drake_plan(
 
 The plan is a data frame with the steps we are going to do.
 
-```{r}
+```{r, paged.print = FALSE}
 plan
 ```
 
@@ -284,6 +284,7 @@ Going forward, we can turn our attention to different tuning parameters and try 
 
 - To save this code in well-organized R scripts, see the [guidance on persistent `drake`-powered projects](https://ropenscilabs.github.io/drake-manual/projects.html).
 - [`drake`](https://github.com/ropensci/drake) has [built-in distributed computing support](https://ropenscilabs.github.io/drake-manual/hpc.html) that lets you fit multiple models in parallel.
+- Due to [the technical details of `drake`'s storage system](https://github.com/richfitz/storr/issues/77#issuecomment-476275570), the above workflow serializes each Keras model twice, which could prove inefficient for large models. In your own `drake` plan commands, you may wish to sacrifice convenience and use [`file_in()`](https://ropensci.github.io/drake/reference/file_in.html) and [`file_out()`](https://ropensci.github.io/drake/reference/file_out.html) to keep track of the models in more explicit files, e.g. `save_model_hdf5(model, file_out("model.h5"))` and `load_model_hdf5(model, file_in("model.h5"))`. To generate multiple file names with [`drake_plan()` transformations](https://ropenscilabs.github.io/drake-manual/plans.html#large-plans), see [this discussion on Stack Overflow](https://stackoverflow.com/questions/55367337/drake-map-over-ggplot-targets-to-output-them).
 
 ```{r, echo = FALSE}
 clean(destroy = TRUE)
