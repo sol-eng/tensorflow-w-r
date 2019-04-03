@@ -203,7 +203,7 @@ plan <- drake_plan(
 
 The plan is a data frame with the steps we are going to do.
 
-```{r, paged.print = FALSE}
+```{r, paged.print = FALSE, warning = FALSE}
 plan
 ```
 
@@ -280,12 +280,128 @@ readd(comparison) # see also loadd()
 
 Going forward, we can turn our attention to different tuning parameters and try to improve specificity.
 
+## Increasing efficiency
+
+Due to [the technical details of `drake`'s storage system](https://github.com/richfitz/storr/issues/77#issuecomment-476275570), the above workflow serializes each Keras model twice, which could prove inefficient for large models. If it takes a long time to save your models, you may wish to store them in their own special [HDF5](https://www.tensorflow.org/tutorials/keras/save_and_restore_models#as_an_hdf5_file) files. This approach adds some cumbersome bookkeeping, but it is faster. We need to rewrite our functions in terms of [`save_model_hdf5()`](https://keras.rstudio.com/reference/save_model_hdf5.html) and [`load_model_hdf5()`](https://keras.rstudio.com/reference/save_model_hdf5.html).
+
+```{r}
+# We add a new model_file argument.
+train_model <- function(data, rec, batch_size, model_file) {
+  model <- define_model(rec)
+  compile(
+    model,
+    optimizer = "adam",
+    loss = "binary_crossentropy",
+    metrics = c("accuracy")
+  )
+  x_train_tbl <- juice(
+    rec,
+    all_predictors(),
+    composition = "matrix"
+  )
+  y_train_vec <- juice(rec, all_outcomes()) %>%
+    pull()
+  history <- fit(
+    object = model,
+    x = x_train_tbl,
+    y = y_train_vec,
+    batch_size = batch_size,
+    epochs = 35,
+    validation_split = 0.30,
+    verbose = 0
+  )
+  
+  # Instead of calling serialize_model(), we save the model to a file.
+  save_model_hdf5(model, model_file)
+  
+  # As an added bonus, we can now return the history from the function.
+  history
+}
+
+# Again, we need a model_file argument.
+confusion_matrix <- function(data, rec, model_file) {
+  # Instead of calling unserialize_model(),
+  # we load the model from the HDF5 file.
+  model <- load_model_hdf5(model_file)
+
+  testing_data <- bake(rec, testing(data))
+  x_test_tbl <- testing_data %>%
+    select(-Churn) %>%
+    as.matrix()
+  y_test_vec <- testing_data %>%
+    select(Churn) %>%
+    pull()
+  yhat_keras_class_vec <- model %>%
+    predict_classes(x_test_tbl) %>%
+    as.factor() %>%
+    fct_recode(yes = "1", no = "0")
+  yhat_keras_prob_vec <-
+    model %>%
+    predict_proba(x_test_tbl) %>%
+    as.vector()
+  test_truth <- y_test_vec %>%
+    as.factor() %>%
+    fct_recode(yes = "1", no = "0")
+  estimates_keras_tbl <- tibble(
+    truth = test_truth,
+    estimate = yhat_keras_class_vec,
+    class_prob = yhat_keras_prob_vec
+  )
+  estimates_keras_tbl %>%
+    conf_mat(truth, estimate)
+}
+```
+
+And we need a new plan that tracks the model files using [`file_in()`](https://ropensci.github.io/drake/reference/file_in.html) and [`file_out()`](https://ropensci.github.io/drake/reference/file_out.html).
+
+```{r}
+batch_sizes <- c(16, 32, 64)
+model_files <- paste0("model_", batch_sizes, ".h5")
+
+plan <- drake_plan(
+  data = read_csv(file_in("customer_churn.csv"), col_types = cols()) %>%
+    initial_split(prop = 0.3),
+  rec = prepare_recipe(data),
+  history = target(
+    train_model(data, rec, batch_size, file_out(model_file)),
+    transform = map(
+      batch_size = !!batch_sizes,
+      model_file = !!model_files,
+      .id = batch_size
+    )
+  ),
+  conf = target(
+    confusion_matrix(data, rec, file_in(model_file)),
+    transform = map(model_file, .id = batch_size)
+  ),
+  comparison = target(
+    compare_models(conf),
+    transform = combine(conf)
+  )
+)
+```
+
+`drake` still resolves the correct dependency relationships, but because of the changes to our commands, our models and downstream results are no longer up to date.
+
+```{r}
+config <- drake_config(plan)
+vis_drake_graph(config)
+```
+
+Another advantage of this more complicated approach is that we can now view model histories.
+
+```{r}
+make(plan)
+
+plot(readd(history_16))
+```
+
 ## Tips
 
-- To save this code in well-organized R scripts, see the [guidance on persistent `drake`-powered projects](https://ropenscilabs.github.io/drake-manual/projects.html).
+- To see this workflow [organized as a collection of modular  scripts](https://ropenscilabs.github.io/drake-manual/projects.html), see the customer churn examples in [this repository](https://github.com/wlandau/drake-examples). You can download example workflows with `drake_example("customer-churn-simple")` and `drake_example("customer-churn-fast")`.
 - [`drake`](https://github.com/ropensci/drake) has [built-in distributed computing support](https://ropenscilabs.github.io/drake-manual/hpc.html) that lets you fit multiple models in parallel.
-- Due to [the technical details of `drake`'s storage system](https://github.com/richfitz/storr/issues/77#issuecomment-476275570), the above workflow serializes each Keras model twice, which could prove inefficient for large models. In your own `drake` plan commands, you may wish to sacrifice convenience and use [`file_in()`](https://ropensci.github.io/drake/reference/file_in.html) and [`file_out()`](https://ropensci.github.io/drake/reference/file_out.html) to keep track of the models in more explicit files, e.g. `save_model_hdf5(model, file_out("model.h5"))` and `load_model_hdf5(model, file_in("model.h5"))`. To generate multiple file names with [`drake_plan()` transformations](https://ropenscilabs.github.io/drake-manual/plans.html#large-plans), see [this discussion on Stack Overflow](https://stackoverflow.com/questions/55367337/drake-map-over-ggplot-targets-to-output-them).
 
 ```{r, echo = FALSE}
 clean(destroy = TRUE)
+unlink(model_files)
 ```
