@@ -282,7 +282,7 @@ Going forward, we can turn our attention to different tuning parameters and try 
 
 ## Increasing efficiency
 
-Due to [the technical details of `drake`'s storage system](https://github.com/richfitz/storr/issues/77#issuecomment-476275570), the above workflow serializes each Keras model twice, which could prove inefficient for large models. If it takes a long time to save your models, you may wish to store them in their own special [HDF5](https://www.tensorflow.org/tutorials/keras/save_and_restore_models#as_an_hdf5_file) files. This approach adds some cumbersome bookkeeping, but it is faster. We need to rewrite our functions in terms of [`save_model_hdf5()`](https://keras.rstudio.com/reference/save_model_hdf5.html) and [`load_model_hdf5()`](https://keras.rstudio.com/reference/save_model_hdf5.html).
+Due to [the technical details of `drake`'s storage system](https://github.com/richfitz/storr/issues/77#issuecomment-476275570), the above workflow serializes each Keras model twice, which could prove inefficient for large models. If it takes a long time to save your models, you may wish to store them in their own special [HDF5](https://www.tensorflow.org/tutorials/keras/save_and_restore_models#as_an_hdf5_file) files. This approach adds some cumbersome bookkeeping, but `make()` should run faster. We need to rewrite our functions in terms of [`save_model_hdf5()`](https://keras.rstudio.com/reference/save_model_hdf5.html) and [`load_model_hdf5()`](https://keras.rstudio.com/reference/save_model_hdf5.html).
 
 ```{r}
 # We add a new model_file argument.
@@ -381,7 +381,7 @@ plan <- drake_plan(
 )
 ```
 
-`drake` still resolves the correct dependency relationships, but because of the changes to our commands, our models and downstream results are no longer up to date.
+`drake` still resolves the correct dependency relationships, but because of the changes to our functions and plan, our models and downstream results are no longer up to date.
 
 ```{r}
 config <- drake_config(plan)
@@ -398,7 +398,7 @@ plot(readd(history_16))
 
 ## Tips
 
-- To see this workflow [organized as a collection of modular  scripts](https://ropenscilabs.github.io/drake-manual/projects.html), see the customer churn examples in [this repository](https://github.com/wlandau/drake-examples). You can download example workflows with `drake_example("customer-churn-simple")` and `drake_example("customer-churn-fast")`.
+- To see this workflow [organized as a collection of modular  scripts](https://ropenscilabs.github.io/drake-manual/projects.html), see the customer churn examples in [this repository](https://github.com/wlandau/drake-examples). You can download the code with `drake_example("customer-churn-simple")` and `drake_example("customer-churn-fast")`.
 - [`drake`](https://github.com/ropensci/drake) has [built-in distributed computing support](https://ropenscilabs.github.io/drake-manual/hpc.html) that lets you fit multiple models in parallel.
 
 ```{r, echo = FALSE}
