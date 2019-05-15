@@ -414,7 +414,7 @@ config <- drake_config(plan)
 vis_drake_graph(config)
 ```
 
-Another advantage of this more complicated approach is that we can now view model histories.
+But one advantage of this more complicated approach is that we can now view model histories.
 
 ```{r}
 make(plan)
