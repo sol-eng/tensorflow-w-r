@@ -60,31 +60,31 @@ prepare_recipe <- function(data) {
 }
 ```
 
-define a [`keras`](https://github.com/rstudio/keras) model,
+define a [`keras`](https://github.com/rstudio/keras) model, exposing arguments to set the dimensionality and activation functions of the layers,
 
 ```{r}
-define_model <- function(rec) {
+define_model <- function(rec, units1, units2, act1, act2, act3) {
   input_shape <- ncol(
     juice(rec, all_predictors(), composition = "matrix")
   )
   keras_model_sequential() %>%
     layer_dense(
-      units = 16,
+      units = units1,
       kernel_initializer = "uniform",
-      activation = "relu",
+      activation = act1,
       input_shape = input_shape
     ) %>%
     layer_dropout(rate = 0.1) %>%
     layer_dense(
-      units = 16,
+      units = units2,
       kernel_initializer = "uniform",
-      activation = "relu"
+      activation = act2
     ) %>%
     layer_dropout(rate = 0.1) %>%
     layer_dense(
       units = 1,
       kernel_initializer = "uniform",
-      activation = "sigmoid"
+      activation = act3
     )
 }
 ```
@@ -93,8 +93,23 @@ train and [serialize](https://tensorflow.rstudio.com/keras/reference/serialize_m
 
 
 ```{r}
-train_model <- function(data, rec, batch_size) {
-  model <- define_model(rec)
+train_model <- function(
+  data,
+  rec,
+  units1 = 16,
+  units2 = 16,
+  act1 = "relu",
+  act2 = "relu",
+  act3 = "sigmoid"
+) {
+  model <- define_model(
+    rec = rec,
+    units1 = units1,
+    units2 = units2,
+    act1 = act1,
+    act2 = act2,
+    act3 = act3
+  )
   compile(
     model,
     optimizer = "adam",
@@ -112,9 +127,9 @@ train_model <- function(data, rec, batch_size) {
     object = model,
     x = x_train_tbl,
     y = y_train_vec,
-    batch_size = batch_size,
-    epochs = 35,
-    validation_split = 0.30,
+    batch_size = 32,
+    epochs = 32,
+    validation_split = 0.3,
     verbose = 0
   )
   serialize_model(model)
@@ -158,43 +173,38 @@ and compare the performance of multiple models.
 
 ```{r}
 compare_models <- function(...) {
-  batch_sizes <- match.call()[-1] %>%
-    as.character() %>%
-    gsub(pattern = "conf_", replacement = "")
+  name <- match.call()[-1] %>%
+    as.character()
   df <- map_df(list(...), summary) %>%
     filter(.metric %in% c("accuracy", "sens", "spec")) %>%
-    mutate(
-      batch_size = rep(batch_sizes, each = n() / length(batch_sizes))
-    ) %>%
+    mutate(name = rep(name, each = n() / length(name))) %>%
     rename(metric = .metric, estimate = .estimate)
   ggplot(df) +
-    geom_line(
-      aes(x = metric, y = estimate, color = batch_size, group = batch_size)
-    ) +
-    theme_gray(16)
+    geom_line(aes(x = metric, y = estimate, color = name, group = name)) +
+    theme_gray(24)
 }
 ```
 
 ## Plan
 
-Next, we define our workflow in a [`drake` plan](https://ropenscilabs.github.io/drake-manual/plans.html). We will prepare the data, train different models with different batch sizes, and compare the models in terms of performance. 
+Next, we define our workflow in a [`drake` plan](https://ropenscilabs.github.io/drake-manual/plans.html). We will prepare the data, train different models with different activation functions, and compare the models in terms of performance. 
 
 ```{r}
-batch_sizes <- c(16, 32)
+activations <- c("relu", "sigmoid")
 
 plan <- drake_plan(
   data = read_csv(file_in("customer_churn.csv"), col_types = cols()) %>%
     initial_split(prop = 0.3),
   rec = prepare_recipe(data),
   model = target(
-    train_model(data, rec, batch_size),
-    transform = map(batch_size = !!batch_sizes)
+    train_model(data, rec, act1 = act),
+    transform = map(act = !!activations)
   ),
   conf = target(
     confusion_matrix(data, rec, model),
-    transform = map(model, .id = batch_size)
+    transform = map(model, .id = act)
   ),
-  comparison = target(
+  metrics = target(
     compare_models(conf),
     transform = combine(conf)
   )
@@ -211,7 +221,7 @@ plan
 
 The graph visualizes the dependency relationships among the steps of the workflow.
 
-```{r}
+```{r, message = FALSE}
 config <- drake_config(plan)
 vis_drake_graph(config)
 ```
@@ -229,29 +239,29 @@ make(plan)
 The two models performed about the same.
 
 ```{r}
-readd(comparison) # see also loadd()
+readd(metrics) # see also loadd()
 ```
 
 ## Add models
 
-Let's try another batch size.
+Let's try another activation function.
 
 ```{r}
-batch_sizes <- c(16, 32, 64)
+activations <- c("relu", "sigmoid", "softmax")
 
 plan <- drake_plan(
   data = read_csv(file_in("customer_churn.csv"), col_types = cols()) %>%
     initial_split(prop = 0.3),
   rec = prepare_recipe(data),
   model = target(
-    train_model(data, rec, batch_size),
-    transform = map(batch_size = !!batch_sizes)
+    train_model(data, rec, act1 = act),
+    transform = map(act = !!activations)
   ),
   conf = target(
     confusion_matrix(data, rec, model),
-    transform = map(model, .id = batch_size)
+    transform = map(model, .id = act)
   ),
-  comparison = target(
+  metrics = target(
     compare_models(conf),
     transform = combine(conf)
   )
@@ -260,7 +270,7 @@ plan <- drake_plan(
 
 We already trained models with batch sizes 16 and 32, and their dependencies have not changed, so some of our work is already up to date.
 
-```{r}
+```{r, message = FALSE}
 config <- drake_config(plan)
 vis_drake_graph(config) # see also outdated() and predict_runtime()
 ```
@@ -275,7 +285,7 @@ make(plan)
 ## Inspect the results again
 
 ```{r}
-readd(comparison) # see also loadd()
+readd(metrics) # see also loadd()
 ```
 
 Going forward, we can turn our attention to different tuning parameters and try to improve specificity.
@@ -287,14 +297,14 @@ Due to [the technical details of `drake`'s storage system](https://github.com/ri
 Here is the time it took `drake` to fully process `model_16`.
 
 ```{r}
-build <- build_times(model_16, type = "build")$elapsed
+build <- build_times(model_relu, type = "build")$elapsed
 build
 ```
 
 And here is the time it took just to run the command.
 
 ```{r}
-command <- build_times(model_16, type = "command")$elapsed
+command <- build_times(model_relu, type = "command")$elapsed
 command
 ```
 
@@ -312,8 +322,24 @@ If it takes a long time to save your models, you may wish to store them in custo
 
 ```{r}
 # We add a new model_file argument.
-train_model <- function(data, rec, batch_size, model_file) {
-  model <- define_model(rec)
+train_model <- function(
+  data,
+  rec,
+  model_file,
+  units1 = 16,
+  units2 = 16,
+  act1 = "relu",
+  act2 = "relu",
+  act3 = "sigmoid"
+) {
+  model <- define_model(
+    rec = rec,
+    units1 = units1,
+    units2 = units2,
+    act1 = act1,
+    act2 = act2,
+    act3 = act3
+  )
   compile(
     model,
     optimizer = "adam",
@@ -327,20 +353,21 @@ train_model <- function(data, rec, batch_size, model_file) {
   )
   y_train_vec <- juice(rec, all_outcomes()) %>%
     pull()
+  
+  # As an added bonus, we get to hold onto the history
+  # of each model fit.
   history <- fit(
     object = model,
     x = x_train_tbl,
     y = y_train_vec,
-    batch_size = batch_size,
-    epochs = 35,
-    validation_split = 0.30,
+    batch_size = 32,
+    epochs = 32,
+    validation_split = 0.3,
     verbose = 0
   )
   
   # Instead of calling serialize_model(), we save the model to a file.
   save_model_hdf5(model, model_file)
-  
-  # As an added bonus, we can now return the history from the function.
   history
 }
 
@@ -349,7 +376,6 @@ confusion_matrix <- function(data, rec, model_file) {
   # Instead of calling unserialize_model(),
   # we load the model from the HDF5 file.
   model <- load_model_hdf5(model_file)
-
   testing_data <- bake(rec, testing(data))
   x_test_tbl <- testing_data %>%
     select(-Churn) %>%
@@ -381,26 +407,21 @@ confusion_matrix <- function(data, rec, model_file) {
 And we need a new plan that tracks the model files using [`file_in()`](https://ropensci.github.io/drake/reference/file_in.html) and [`file_out()`](https://ropensci.github.io/drake/reference/file_out.html).
 
 ```{r}
-batch_sizes <- c(16, 32, 64)
-model_files <- paste0("model_", batch_sizes, ".h5")
+activations <- c("relu", "sigmoid", "softmax")
 
 plan <- drake_plan(
   data = read_csv(file_in("customer_churn.csv"), col_types = cols()) %>%
     initial_split(prop = 0.3),
   rec = prepare_recipe(data),
   history = target(
-    train_model(data, rec, batch_size, file_out(model_file)),
-    transform = map(
-      batch_size = !!batch_sizes,
-      model_file = !!model_files,
-      .id = batch_size
-    )
+    train_model(data, rec, file_out(!!paste0(act, ".h5")), act1 = act),
+    transform = map(act = !!activations)
   ),
   conf = target(
-    confusion_matrix(data, rec, file_in(model_file)),
-    transform = map(model_file, .id = batch_size)
+    confusion_matrix(data, rec, file_in(!!paste0(act, ".h5"))),
+    transform = map(act)
   ),
-  comparison = target(
+  metrics = target(
     compare_models(conf),
     transform = combine(conf)
   )
@@ -409,7 +430,7 @@ plan <- drake_plan(
 
 `drake` still resolves the correct dependency relationships, but because of the changes to our functions and plan, our models and downstream results are no longer up to date.
 
-```{r}
+```{r, message = FALSE}
 config <- drake_config(plan)
 vis_drake_graph(config)
 ```
@@ -419,7 +440,7 @@ But one advantage of this more complicated approach is that we can now view mode
 ```{r}
 make(plan)
 
-plot(readd(history_16))
+plot(readd(history_relu))
 ```
 
 ## Tips
@@ -429,5 +450,4 @@ plot(readd(history_16))
 
 ```{r, echo = FALSE}
 clean(destroy = TRUE)
-unlink(model_files)
 ```
