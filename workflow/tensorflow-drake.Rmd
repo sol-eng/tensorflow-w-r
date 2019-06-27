@@ -291,7 +291,7 @@ readd(metrics) # see also loadd()
 
 ## Update your code
 
-If you change upstream functions, even nested ones, `drake` automatically refits the affected models. Let's increase dropout in both layers.
+If you change upstream functions in your environment, even nested ones, `drake` automatically refits the affected models. Let's increase dropout in both layers.
 
 ```{r}
 define_model <- function(rec, units1, units2, act1, act2, act3) {
